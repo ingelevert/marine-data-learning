@@ -1,92 +1,78 @@
+#senegal fishing events pulled from gfw api
+
 import requests
 import time
 import csv
-import pandas as pd
-try:
-    from gfw_utils import get_headers, get_base_url
-except ImportError:
-    raise ImportError("❌ 'gfw_utils' module is missing. Ensure it is installed and accessible.")
+from datetime import datetime
+from gfw_utils import get_headers, get_base_url
 
 BASE_URL = get_base_url()
 HEADERS = get_headers()
-INPUT_FILE = "/Users/levilina/Documents/Coding/marine-data-learning/data/raw/Cleaned_Senegal_Fleet.csv"  # You must provide this CSV with a 'Name' column
-OUTPUT_FILE = "data/enriched_senegal_fleet.csv"
+# Example Senegalese vessel IDs (replace with actual IDs or read from a file)
+SENEGALESE_VESSEL_IDS = [
+    # "9b3e9019d-d67f-005a-9593-b66b997559e5",  # CLAUDINA example
+]
 
-# Simple pattern-based tagging of ownership
-OWNER_TAGS = {
-    "pereira": "🇪🇸 Spanish",
-    "soperka": "🇪🇸 Spanish",
-    "zhejiang": "🇨🇳 Chinese",
-    "dalian": "🇨🇳 Chinese",
-    "france": "🇫🇷 French",
-    "sen": "🇸🇳 Senegalese",
-    "société": "🇸🇳 Senegalese",
-    "sn": "🇸🇳 Senegalese"
-}
+START_DATE = "2024-01-01"
+END_DATE = "2024-12-31"
+OUTPUT_FILE = "data/fishing_events_senegal.csv"
 
-def tag_owner_nationality(owner_string):
-    if not owner_string:
-        return "❓ Unknown"
-    lowered = owner_string.lower()
-    for keyword, tag in OWNER_TAGS.items():
-        if keyword in lowered:
-            return tag
-    return "❓ Unknown"
-
-def query_vessel_by_name(name):
-    url = f"{BASE_URL}/vessels/search"
+def fetch_fishing_events(vessel_id):
+    url = f"{BASE_URL}/events"
     params = {
-        "query": name,
-        "datasets[0]": "public-global-vessel-identity:latest"
+        "vessels[0]": vessel_id,
+        "datasets[0]": "public-global-fishing-events:latest",
+        "start-date": START_DATE,
+        "end-date": END_DATE,
+        "limit": 100,
+        "offset": 0
     }
-    response = requests.get(url, headers=HEADERS, params=params)
-    if response.status_code != 200:
-        print(f"❌ Failed to fetch vessel '{name}': {response.status_code}")
-        return None
 
-    entries = response.json().get("entries", [])
-    for entry in entries:
-        flag = entry.get("selfReportedInfo", [{}])[0].get("flag")
-        geartypes = entry.get("combinedSourcesInfo", [{}])[0].get("geartypes", [])
-        geartype_names = [g["name"] for g in geartypes]
+    all_events = []
 
-        if flag == "SEN" and any("FISHING" in g.upper() for g in geartype_names):
-            owners_raw = "; ".join(
-                [owner.get("name", "") for owner in entry.get("registryOwners", [])]
-            )
-            return {
-                "shipname": entry.get("selfReportedInfo", [{}])[0].get("shipname", ""),
-                "imo": entry.get("selfReportedInfo", [{}])[0].get("imo", ""),
-                "callsign": entry.get("selfReportedInfo", [{}])[0].get("callsign", ""),
-                "flag": flag,
-                "geartypes": ", ".join(geartype_names),
-                "vesselId": entry.get("selfReportedInfo", [{}])[0].get("id", ""),
-                "owners": owners_raw,
-                "flagged_owner": tag_owner_nationality(owners_raw)
-            }
-    return None
+    while True:
+        response = requests.get(url, headers=HEADERS, params=params)
+        if response.status_code != 200:
+            print(f"❌ Failed to fetch events for vessel {vessel_id}: {response.status_code}")
+            break
+
+        data = response.json()
+        events = data.get("entries", [])
+        if not events:
+            break
+
+        all_events.extend(events)
+        params["offset"] += len(events)
+
+        if "nextOffset" not in data:
+            break
+
+        time.sleep(0.3)
+
+    return all_events
 
 def main():
-    df = pd.read_csv(INPUT_FILE)
-    enriched_data = []
+    with open(OUTPUT_FILE, "w", newline="") as f:
+        fieldnames = ["vessel_id", "start", "end", "lat", "lon", "distance_from_shore_km"]
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
 
-    for name in df["Name"].dropna().unique():
-        print(f"🔍 Looking up vessel: {name}")
-        vessel = query_vessel_by_name(name)
-        if vessel:
-            enriched_data.append(vessel)
-        time.sleep(0.1)  # Rate limit friendly
+        for vessel_id in SENEGALESE_VESSEL_IDS:
+            print(f"🔄 Fetching events for vessel: {vessel_id}")
+            events = fetch_fishing_events(vessel_id)
 
-    # Save results
-    if enriched_data:
-        keys = ["shipname", "imo", "callsign", "flag", "geartypes", "vesselId", "owners", "flagged_owner"]
-        with open(OUTPUT_FILE, "w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=keys)
-            writer.writeheader()
-            writer.writerows(enriched_data)
-        print(f"\n📄 Done! {len(enriched_data)} vessels saved to {OUTPUT_FILE}")
-    else:
-        print("⚠️ No matching vessels found.")
+            for event in events:
+                writer.writerow({
+                    "vessel_id": vessel_id,
+                    "start": event.get("start"),
+                    "end": event.get("end"),
+                    "lat": event.get("position", {}).get("lat"),
+                    "lon": event.get("position", {}).get("lon"),
+                    "distance_from_shore_km": event.get("distances", {}).get("startDistanceFromShoreKm")
+                })
+
+    print(f"✅ Done. Saved fishing events to {OUTPUT_FILE}")
+
 
 if __name__ == "__main__":
     main()
