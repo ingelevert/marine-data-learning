@@ -3,9 +3,9 @@
 import requests
 from gfw_utils import get_base_url, get_headers
 
-def search_vessel_by_imo(imo_number):
-    """Search for a vessel by IMO number and return its vesselId."""
-    print(f"🔍 Searching for vessel with IMO: {imo_number}")
+def fetch_gfw_data(imo_number):
+    """Fetch data for a vessel by IMO number."""
+    print(f"🔍 Fetching data for IMO: {imo_number}")
     url = f"{get_base_url()}/vessels/search"
     params = {
         "query": imo_number,
@@ -14,11 +14,19 @@ def search_vessel_by_imo(imo_number):
 
     response = requests.get(url, headers=get_headers(), params=params)
     if response.status_code != 200:
-        print("❌ Vessel search failed.")
-        print(response.status_code, response.text)
+        print(f"❌ Failed to fetch data for IMO {imo_number}: {response.status_code}")
         return None
 
-    data = response.json()
+    return response.json()
+
+def search_vessel_by_imo(imo_number):
+    """Search for a vessel by IMO number and return its vesselId."""
+    print(f"🔍 Searching for vessel with IMO: {imo_number}")
+    data = fetch_gfw_data(imo_number)
+    if not data:
+        print("❌ Vessel search failed.")
+        return None
+
     entries = data.get("entries", [])
     if not entries:
         print("⚠️ No vessels found.")
