@@ -10,7 +10,7 @@ except Exception as e:
 print("Initial Data Preview:")
 print(df.head())
 
-# Step 2: If your data is all in one column, split it based on commas.
+# Step 2: If your data is all in one column, split it based on commas or string? Need to check this out.
 if df.shape[1] == 1:
     df = df[0].str.split(',', expand=True)
     # Strip extra whitespace from each cell.

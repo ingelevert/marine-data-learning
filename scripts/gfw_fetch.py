@@ -1,20 +1,19 @@
-# scripts/gfw_fetch.py
-
 import requests
-from gfw_utils import get_base_url, get_headers
+from scripts.gfw_api_v3 import get_base_url, get_headers
 
-def fetch_gfw_data(imo_number):
-    """Fetch data for a vessel by IMO number."""
-    print(f"🔍 Fetching data for IMO: {imo_number}")
+def fetch_gfw_data(imo):
+    """
+    Fetch metadata for a vessel using its IMO number.
+    """
     url = f"{get_base_url()}/vessels/search"
     params = {
-        "query": imo_number,
+        "query": imo,
         "datasets[0]": "public-global-vessel-identity:latest"
     }
 
     response = requests.get(url, headers=get_headers(), params=params)
     if response.status_code != 200:
-        print(f"❌ Failed to fetch data for IMO {imo_number}: {response.status_code}")
+        print(f"❌ API error for IMO {imo}: {response.status_code}")
         return None
 
     return response.json()
