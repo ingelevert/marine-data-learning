@@ -61,13 +61,6 @@ for i, imo in enumerate(imos):
         headers = get_headers()
         response = requests.get(url, headers=headers, params=params)
 
-        if response.status_code == 200:
-            raw_data = response.json()
-            raw_data['imo'] = imo  # Keep track of which IMO the data belongs to
-            flattened_data = flatten_data(raw_data)  # Pass raw_data directly
-            all_results.extend(flattened_data)
-        else:
-            print(f"❌ Failed to fetch data for IMO {imo}: {response.status_code}")
     except Exception as e:
         print(f"Error fetching IMO {imo}: {e}")
 
